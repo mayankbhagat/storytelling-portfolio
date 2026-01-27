@@ -4,15 +4,18 @@ import { useScroll, useMotionValueEvent } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * IMPORTANT:
- * This array MUST match your existing filenames exactly.
- * Example filenames:
- * frame_001_delay-0.067s.webp
- * frame_002_delay-0.067s.webp
+ * FILE RANGE:
+ * frame_014_delay-0.042s.webp
+ * frame_015_delay-0.042s.webp
+ * ...
+ * frame_083_delay-0.042s.webp  (70 frames total)
  */
-const FRAME_FILES = Array.from({ length: 70 }, (_, i) =>
-  `/sequence/frame_${String(i + 1).padStart(3, "0")}_delay-0.067s.webp`
-);
+const START_FRAME = 14;
+const TOTAL_FRAMES = 70;
+const FRAME_FILES = Array.from({ length: TOTAL_FRAMES }, (_, i) => {
+  const frameNumber = START_FRAME + i;
+  return `/sequence/frame_${String(frameNumber).padStart(3, "0")}_delay-0.042s.webp`;
+});
 
 export default function ScrollyCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -48,7 +51,7 @@ export default function ScrollyCanvas() {
   useEffect(() => {
     setupCanvas();
 
-    // Load FIRST frame immediately
+    // Load first frame immediately
     const firstImg = new Image();
     firstImg.src = FRAME_FILES[0];
     imagesRef.current[0] = firstImg;
@@ -119,7 +122,7 @@ export default function ScrollyCanvas() {
 
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm tracking-widest">
-          Loading sequence…
+          Loading experience…
         </div>
       )}
     </div>
