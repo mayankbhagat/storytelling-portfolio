@@ -3,7 +3,16 @@
 import { useScroll, useMotionValueEvent } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
-const TOTAL_FRAMES = 70; // ONLY first 70 frames are used
+/**
+ * IMPORTANT:
+ * This array MUST match your existing filenames exactly.
+ * Example filenames:
+ * frame_001_delay-0.067s.webp
+ * frame_002_delay-0.067s.webp
+ */
+const FRAME_FILES = Array.from({ length: 70 }, (_, i) =>
+  `/sequence/frame_${String(i + 1).padStart(3, "0")}_delay-0.067s.webp`
+);
 
 export default function ScrollyCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -14,7 +23,7 @@ export default function ScrollyCanvas() {
   const { scrollYProgress } = useScroll();
 
   /* -----------------------------
-     CANVAS SETUP (ONCE)
+     CANVAS SETUP
   ------------------------------ */
   const setupCanvas = () => {
     const canvas = canvasRef.current;
@@ -34,14 +43,14 @@ export default function ScrollyCanvas() {
   };
 
   /* -----------------------------
-     IMAGE LOADING (FAST + SAFE)
+     IMAGE LOADING
   ------------------------------ */
   useEffect(() => {
     setupCanvas();
 
-    // 1️⃣ Load FIRST frame immediately
+    // Load FIRST frame immediately
     const firstImg = new Image();
-    firstImg.src = `/sequence/frame_000.webp`;
+    firstImg.src = FRAME_FILES[0];
     imagesRef.current[0] = firstImg;
 
     firstImg.onload = () => {
@@ -49,13 +58,13 @@ export default function ScrollyCanvas() {
       setReady(true);
     };
 
-    // 2️⃣ Load remaining frames lazily
+    // Load remaining frames lazily
     let index = 1;
     const loadIdle = () => {
-      if (index >= TOTAL_FRAMES) return;
+      if (index >= FRAME_FILES.length) return;
 
       const img = new Image();
-      img.src = `/sequence/frame_${String(index).padStart(3, "0")}.webp`;
+      img.src = FRAME_FILES[index];
       imagesRef.current[index] = img;
       index++;
 
@@ -88,14 +97,14 @@ export default function ScrollyCanvas() {
   };
 
   /* -----------------------------
-     SCROLL → FRAME (OPTIMIZED)
+     SCROLL → FRAME
   ------------------------------ */
   useMotionValueEvent(scrollYProgress, "change", (v) => {
     if (!ready) return;
 
     const frame = Math.min(
-      TOTAL_FRAMES - 1,
-      Math.floor(v * TOTAL_FRAMES)
+      FRAME_FILES.length - 1,
+      Math.floor(v * FRAME_FILES.length)
     );
 
     if (frame === lastFrameRef.current) return;
@@ -110,7 +119,7 @@ export default function ScrollyCanvas() {
 
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm tracking-widest">
-          Loading experience…
+          Loading sequence…
         </div>
       )}
     </div>
