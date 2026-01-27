@@ -1,102 +1,118 @@
 "use client";
 
-import { useScroll, useMotionValueEvent, useTransform } from "framer-motion";
+import { useScroll, useMotionValueEvent } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
+const TOTAL_FRAMES = 70; // ONLY first 70 frames are used
+
 export default function ScrollyCanvas() {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [images, setImages] = useState<HTMLImageElement[]>([]);
-    const [isLoaded, setIsLoaded] = useState(false);
-    const totalFrames = 100; // 178 frames processed
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imagesRef = useRef<HTMLImageElement[]>([]);
+  const [ready, setReady] = useState(false);
+  const lastFrameRef = useRef(-1);
 
-    // Track scroll progress of the entire page or a specific container
-    // Here we use the window/viewport scroll for the timeline
-    const { scrollYProgress } = useScroll();
+  const { scrollYProgress } = useScroll();
 
-    // Transform scroll (0 to 1) to frame index (0 to totalFrames - 1)
-    const frameIndex = useTransform(scrollYProgress, [0, 1], [0, totalFrames - 1]);
+  /* -----------------------------
+     CANVAS SETUP (ONCE)
+  ------------------------------ */
+  const setupCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    useEffect(() => {
-        // Preload images
-        const loadImages = async () => {
-            const loadedImages: HTMLImageElement[] = [];
+    const dpr = window.devicePixelRatio || 1;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
 
-            for (let i = 1; i <= totalFrames; i++) {
-                const img = new Image();
-                const src = `/sequence/${String(i).padStart(3, "0")}.webp`;
-                img.src = src;
-                await new Promise((resolve) => {
-                    img.onload = resolve;
-                    img.onerror = resolve; // Continue even if frame fails
-                });
-                loadedImages.push(img);
-            }
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
 
-            setImages(loadedImages);
-            setIsLoaded(true);
-        };
+    const ctx = canvas.getContext("2d");
+    if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
 
-        loadImages();
-    }, []);
+  /* -----------------------------
+     IMAGE LOADING (FAST + SAFE)
+  ------------------------------ */
+  useEffect(() => {
+    setupCanvas();
 
-    const renderFrame = (index: number) => {
-        const canvas = canvasRef.current;
-        const ctx = canvas?.getContext("2d");
-        const img = images[index];
+    // 1️⃣ Load FIRST frame immediately
+    const firstImg = new Image();
+    firstImg.src = `/sequence/frame_000.webp`;
+    imagesRef.current[0] = firstImg;
 
-        if (!canvas || !ctx || !img) return;
-
-        // Canvas sizing (handle high DPI)
-        // We want the canvas to cover the viewport (object-fit: cover equivalent)
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-
-        const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
-        const x = (canvas.width - img.width * scale) / 2;
-        const y = (canvas.height - img.height * scale) / 2;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+    firstImg.onload = () => {
+      drawFrame(0);
+      setReady(true);
     };
 
-    useMotionValueEvent(frameIndex, "change", (latest) => {
-        if (!isLoaded) return;
-        const frameToRender = Math.min(
-            totalFrames - 1,
-            Math.max(0, Math.round(latest))
-        );
-        renderFrame(frameToRender);
-    });
+    // 2️⃣ Load remaining frames lazily
+    let index = 1;
+    const loadIdle = () => {
+      if (index >= TOTAL_FRAMES) return;
 
-    // Initial render when loaded
-    useEffect(() => {
-        if (isLoaded) {
-            renderFrame(0);
-        }
-    }, [isLoaded]);
+      const img = new Image();
+      img.src = `/sequence/frame_${String(index).padStart(3, "0")}.webp`;
+      imagesRef.current[index] = img;
+      index++;
 
-    // Handle Resize
-    useEffect(() => {
-        if (!isLoaded) return;
+      requestIdleCallback(loadIdle);
+    };
 
-        const handleResize = () => {
-            // Rerender current frame on resize
-            const currentFrame = Math.round(frameIndex.get());
-            renderFrame(currentFrame);
-        };
+    requestIdleCallback(loadIdle);
 
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [isLoaded]);
+    window.addEventListener("resize", setupCanvas);
+    return () => window.removeEventListener("resize", setupCanvas);
+  }, []);
 
-    return (
-        <div className="sticky top-0 h-screen w-full overflow-hidden bg-[#121212]">
-            <canvas ref={canvasRef} className="block h-full w-full object-cover" />
-            {!isLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center text-white/50 text-sm">
-                    Loading Sequence...
-                </div>
-            )}
-        </div>
+  /* -----------------------------
+     DRAW FUNCTION
+  ------------------------------ */
+  const drawFrame = (index: number) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    const img = imagesRef.current[index];
+
+    if (!canvas || !ctx || !img || !img.complete) return;
+
+    const { width, height } = canvas;
+    const scale = Math.max(width / img.width, height / img.height);
+    const x = (width - img.width * scale) / 2;
+    const y = (height - img.height * scale) / 2;
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+  };
+
+  /* -----------------------------
+     SCROLL → FRAME (OPTIMIZED)
+  ------------------------------ */
+  useMotionValueEvent(scrollYProgress, "change", (v) => {
+    if (!ready) return;
+
+    const frame = Math.min(
+      TOTAL_FRAMES - 1,
+      Math.floor(v * TOTAL_FRAMES)
     );
+
+    if (frame === lastFrameRef.current) return;
+    lastFrameRef.current = frame;
+
+    drawFrame(frame);
+  });
+
+  return (
+    <div className="sticky top-0 h-screen w-full overflow-hidden bg-[#121212]">
+      <canvas ref={canvasRef} className="block h-full w-full" />
+
+      {!ready && (
+        <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm tracking-widest">
+          Loading experience…
+        </div>
+      )}
+    </div>
+  );
 }
