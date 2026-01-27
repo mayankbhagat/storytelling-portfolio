@@ -7,7 +7,7 @@ export default function ScrollyCanvas() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [images, setImages] = useState<HTMLImageElement[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
-    const totalFrames = 70; // 178 frames processed
+    const totalFrames = 100; // 178 frames processed
 
     // Track scroll progress of the entire page or a specific container
     // Here we use the window/viewport scroll for the timeline
